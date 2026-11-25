@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>Home</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #0E1116; }
+body { color: #F2F4F7; font-family: Inter, "Samsung One", Arial, sans-serif; }
+p { margin: 0; }
+.screen { position: relative; width: 1920px; height: 1080px; box-sizing: border-box; padding: 96px 120px 72px; display: flex; flex-direction: column; justify-content: space-between; }
+header { display: flex; justify-content: space-between; align-items: flex-start; }
+.greeting { margin-bottom: 8px; font-size: 32px; font-weight: 500; color: #9AA4B2; }
+.time { margin-bottom: 8px; font-size: 168px; font-weight: 600; letter-spacing: -4px; line-height: 1; }
+.date { font-size: 32px; color: #C9D1DC; }
+.weather { display: flex; align-items: center; padding: 24px 32px; border-radius: 24px; background: #171B22; }
+.weather.hidden { visibility: hidden; }
+.wicon { width: 56px; height: 56px; margin-right: 20px; }
+.wicon svg { width: 56px; height: 56px; }
+.temp { margin-bottom: 4px; font-size: 44px; font-weight: 600; }
+.place { font-size: 24px; color: #9AA4B2; }
+.label { margin-bottom: 32px; font-size: 28px; font-weight: 500; color: #9AA4B2; }
+.row { display: flex; align-items: center; padding-left: 12px; }
+.tile { width: 208px; height: 208px; box-sizing: border-box; margin-right: 28px; padding: 24px; border-radius: 28px; display: flex; flex-direction: column; justify-content: space-between; transition: transform 0.15s ease-out, box-shadow 0.15s ease-out; }
+.tile:last-child { margin-right: 0; }
+.tile.focus { transform: scale(1.1); box-shadow: 0 0 0 6px #F5F7FA; }
+.note { font-size: 20px; }
+.name { font-size: 30px; font-weight: 600; }
+.hint { margin-top: 40px; font-size: 30px; font-weight: 500; }
+.hint span { color: #9AA4B2; font-weight: 400; }
+footer { display: flex; font-size: 22px; color: #9AA4B2; }
+footer span { margin-right: 40px; }
+.toast { position: absolute; top: 48px; left: 50%; transform: translateX(-50%); padding: 18px 32px; border-radius: 16px; background: #F5F7FA; color: #0E1116; font-size: 26px; font-weight: 500; white-space: nowrap; opacity: 0; transition: opacity 0.2s; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <header>
+    <div>
+      <p class="greeting" id="greeting">Hello</p>
+      <p class="time" id="time">--:--</p>
+      <p class="date" id="date"></p>
+    </div>
+    <div class="weather hidden" id="weather">
+      <div class="wicon" id="wicon"></div>
+      <div>
+        <p class="temp" id="temp"></p>
+        <p class="place" id="place"></p>
+      </div>
+    </div>
+  </header>
+  <section>
+    <p class="label">Your apps</p>
+    <div class="row" id="row"></div>
+    <p class="hint" id="hint"></p>
+  </section>
+  <footer>
+    <span>Left / Right to move</span>
+    <span>OK to open</span>
+    <span>Back to close</span>
+  </footer>
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+(function () {
+  // ===================== YOUR SETTINGS =====================
+  // Your town for the weather, e.g. 'Leeds'. Leave as '' to hide the weather.
+  var TOWN = '';
+
+  // Your apps, in order. "match" is how Home finds the app on the TV.
+  var APPS = [
+    { name: 'TizenTube',   note: 'YouTube, no ads',  bg: '#2B2346', fg: '#C8BDF0', module: 'npm/@foxreis/tizentube' },
+    { name: 'Netflix',     note: 'Films & series',   bg: '#3A1F22', fg: '#F0B8BC', match: ['netflix'] },
+    { name: 'BBC iPlayer', note: 'Live & catch-up',  bg: '#1F2A3A', fg: '#A9C3E8', match: ['iplayer'] },
+    { name: 'ITVX',        note: 'Live & catch-up',  bg: '#2A2F1E', fg: '#CFDDA0', match: ['itvx', 'itv hub', 'itv'] },
+    { name: 'Channel 4',   note: 'Live & catch-up',  bg: '#1E2F2C', fg: '#9FD9CC', match: ['channel 4', 'all 4', 'all4'] },
+    { name: 'Prime Video', note: 'Films & series',   bg: '#1C2736', fg: '#9CC2E6', match: ['prime video', 'amazon'] },
+    { name: 'Disney+',     note: 'Films & series',   bg: '#22233D', fg: '#B9BDF2', match: ['disney'] }
+  ];
+  // =========================================================
+
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var ICONS = {
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="#C9D1DC" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>',
+    cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="#C9D1DC" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H7a4 4 0 1 1 .9-7.9A5.5 5.5 0 0 1 18.5 12a3.5 3.5 0 0 1-1 7z"></path></svg>',
+    rain: '<svg viewBox="0 0 24 24" fill="none" stroke="#C9D1DC" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 15H7a4 4 0 1 1 .9-7.9A5.5 5.5 0 0 1 18.5 8a3.5 3.5 0 0 1-1 7z"></path><path d="M8 18l-1 2.5M12 18l-1 2.5M16 18l-1 2.5"></path></svg>',
+    snow: '<svg viewBox="0 0 24 24" fill="none" stroke="#C9D1DC" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 15H7a4 4 0 1 1 .9-7.9A5.5 5.5 0 0 1 18.5 8a3.5 3.5 0 0 1-1 7z"></path><path d="M8 19h.01M12 19h.01M16 19h.01M10 21.5h.01M14 21.5h.01" stroke-width="2.4"></path></svg>'
+  };
+
+  var focus = 0;
+  var tiles = [];
+  var installed = null;
+
+  function $(id) { return document.getElementById(id); }
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show';
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(function () { t.className = 'toast'; }, 3500);
+  }
+
+  // ---------- Clock ----------
+  function tick() {
+    var d = new Date();
+    var h = d.getHours();
+    $('time').textContent = pad(h) + ':' + pad(d.getMinutes());
+    $('date').textContent = DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()];
+    $('greeting').textContent = h < 12 ? 'Good morning' : (h < 18 ? 'Good afternoon' : 'Good evening');
+  }
+
+  // ---------- Weather (Open-Meteo, no account needed) ----------
+  function describe(c) {
+    if (c === 0) return ['Clear', 'sun'];
+    if (c === 1) return ['Mostly clear', 'sun'];
+    if (c === 2) return ['Partly cloudy', 'cloud'];
+    if (c === 3) return ['Cloudy', 'cloud'];
+    if (c === 45 || c === 48) return ['Fog', 'cloud'];
+    if (c >= 51 && c <= 57) return ['Drizzle', 'rain'];
+    if (c >= 61 && c <= 67) return ['Rain', 'rain'];
+    if (c >= 71 && c <= 77) return ['Snow', 'snow'];
+    if (c >= 80 && c <= 82) return ['Showers', 'rain'];
+    if (c >= 85 && c <= 86) return ['Snow showers', 'snow'];
+    if (c >= 95) return ['Thunderstorms', 'rain'];
+    return ['', 'cloud'];
+  }
+
+  function weather() {
+    if (!TOWN || !window.fetch) return;
+    fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=' + encodeURIComponent(TOWN))
+      .then(function (r) { return r.json(); })
+      .then(function (g) {
+        if (!g.results || !g.results.length) throw new Error('Town not found');
+        var place = g.results[0];
+        return fetch('https://api.open-meteo.com/v1/forecast?current=temperature_2m,weather_code&timezone=auto&latitude=' + place.latitude + '&longitude=' + place.longitude)
+          .then(function (r) { return r.json(); })
+          .then(function (w) {
+            var info = describe(w.current.weather_code);
+            $('wicon').innerHTML = ICONS[info[1]];
+            $('temp').textContent = Math.round(w.current.temperature_2m) + '°';
+            $('place').textContent = place.name + (info[0] ? ' · ' + info[0] : '');
+            $('weather').className = 'weather';
+          });
+      })
+      .catch(function () { /* keep the weather hidden if it can't load */ });
+  }
+
+  // ---------- Tiles ----------
+  function render() {
+    var row = $('row');
+    for (var i = 0; i < APPS.length; i++) {
+      var a = APPS[i];
+      var el = document.createElement('div');
+      var note = document.createElement('span');
+      var name = document.createElement('span');
+      el.className = 'tile';
+      el.style.background = a.bg;
+      note.className = 'note';
+      note.style.color = a.fg;
+      note.textContent = a.note;
+      name.className = 'name';
+      name.textContent = a.name;
+      el.appendChild(note);
+      el.appendChild(name);
+      el.addEventListener('click', (function (idx) {
+        return function () { setFocus(idx); open(idx); };
+      })(i));
+      row.appendChild(el);
+      tiles.push(el);
+    }
+    setFocus(0);
+  }
+
+  function setFocus(i) {
+    if (i < 0 || i >= tiles.length) return;
+    tiles[focus].className = 'tile';
+    focus = i;
+    tiles[focus].className = 'tile focus';
+    var hint = $('hint');
+    var rest = document.createElement('span');
+    hint.textContent = APPS[focus].name + ' ';
+    rest.textContent = '· press OK to open';
+    hint.appendChild(rest);
+  }
+
+  // ---------- Opening apps ----------
+  function open(i) {
+    var a = APPS[i];
+    if (a.module) openModule(a);
+    else openTizenApp(a);
+  }
+
+  function loadInstalled(cb) {
+    if (installed) return cb(installed);
+    if (!window.tizen || !tizen.application) return cb(null);
+    try {
+      tizen.application.getAppsInfo(function (list) { installed = list; cb(list); }, function () { cb(null); });
+    } catch (e) { cb(null); }
+  }
+
+  function findApp(list, match) {
+    for (var m = 0; m < match.length; m++) {
+      for (var i = 0; i < list.length; i++) {
+        var n = (list[i].name || '').toLowerCase();
+        if (n.indexOf(match[m]) !== -1 && list[i].show !== false) return list[i];
+      }
+    }
+    return null;
+  }
+
+  function openTizenApp(a) {
+    loadInstalled(function (list) {
+      if (!list) { toast('Home can\'t open other apps on this TV'); return; }
+      var info = findApp(list, a.match);
+      if (!info) { toast(a.name + ' isn\'t installed. Get it from Samsung Apps.'); return; }
+      try {
+        tizen.application.launch(info.id, function () {}, function () { toast('Couldn\'t open ' + a.name); });
+      } catch (e) { toast('Couldn\'t open ' + a.name); }
+    });
+  }
+
+  // Opens a TizenBrew module (like TizenTube) the same way TizenBrew's own menu does.
+  function openModule(a) {
+    var ws;
+    var done = false;
+    try { ws = new WebSocket('ws://127.0.0.1:8081'); } catch (e) { toast('Couldn\'t reach TizenBrew'); return; }
+    var timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      toast('TizenBrew didn\'t answer. Try again.');
+      try { ws.close(); } catch (e) {}
+    }, 8000);
+    ws.onopen = function () { ws.send(JSON.stringify({ type: 4 })); };
+    ws.onmessage = function (ev) {
+      var msg;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (msg.type !== 4 || done) return;
+      if (!msg.payload) {
+        setTimeout(function () { ws.send(JSON.stringify({ type: 4 })); }, 500);
+        return;
+      }
+      done = true;
+      clearTimeout(timer);
+      var mdl = null;
+      for (var i = 0; i < msg.payload.length; i++) {
+        if (msg.payload[i].fullName === a.module) mdl = msg.payload[i];
+      }
+      if (!mdl) { toast(a.name + ' isn\'t added in TizenBrew'); return; }
+      try {
+        for (var k = 0; k < mdl.keys.length; k++) tizen.tvinputdevice.registerKey(mdl.keys[k]);
+      } catch (e) {}
+      ws.send(JSON.stringify({ type: 5, payload: mdl }));
+      if (!mdl.evaluateScriptOnDocumentStart) {
+        setTimeout(function () { location.href = mdl.appPath; }, 300);
+      }
+    };
+    ws.onerror = function () {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      toast('Couldn\'t reach TizenBrew');
+    };
+  }
+
+  // ---------- Remote control ----------
+  document.addEventListener('keydown', function (e) {
+    switch (e.keyCode) {
+      case 37: setFocus(focus - 1); e.preventDefault(); break;   // Left
+      case 39: setFocus(focus + 1); e.preventDefault(); break;   // Right
+      case 13: open(focus); e.preventDefault(); break;           // OK
+      case 10009:                                                // Back
+        e.preventDefault();
+        try { tizen.application.getCurrentApplication().exit(); } catch (err) {}
+        break;
+    }
+  });
+
+  render();
+  tick();
+  setInterval(tick, 5000);
+  weather();
+  setInterval(weather, 30 * 60 * 1000);
+  loadInstalled(function () {});
+})();
+</script>
+</body>
+</html>
