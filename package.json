@@ -1,9 +1,0 @@
-{
-  "name": "tv-home",
-  "appName": "Home",
-  "version": "1.0.0",
-  "description": "A calm home screen for the Samsung TV",
-  "packageType": "app",
-  "appPath": "index.html",
-  "keys": []
-}
